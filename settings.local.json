@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cp js/app.js __TRACKED_VAR__/app.js.bak)",
+      "Bash(cp js/app.js \"/c/Users/inver/AppData/Local/Temp/claude/C--Users-inver-OneDrive-Escritorio-Claude/73372697-49cb-4f1a-bd2c-2c143cf06425/scratchpad/app.js.bak\")",
+      "Bash(sed -i '1870,1950d' js/app.js)",
+      "Bash(cat \"/c/Users/inver/OneDrive/Escritorio/Claude/.claude/launch.json\" 2>&1)",
+      "Bash(rm .claude/launch.json)",
+      "Bash(rmdir .claude)"
+    ]
+  }
+}
