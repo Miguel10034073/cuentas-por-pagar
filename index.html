@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Facturas por cancelar</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <span class="logo">$</span>
+    <div>
+      <h1>Facturas por cancelar</h1>
+      <p class="sub">Cuentas por pagar · datos guardados solo en este navegador</p>
+    </div>
+  </div>
+  <div class="actions">
+    <label class="btn primary" title="Seleccione uno o varios XML de la DIAN. Puede incluir los PDF: se asocian por el número de factura del nombre del archivo.">
+      Importar XML (+ PDF)
+      <input type="file" id="inpXml" accept=".xml,.pdf" multiple hidden>
+    </label>
+    <button class="btn" id="btnNueva">Nueva manual</button>
+    <button class="btn" id="btnBackup" title="Pregunta dónde guardar un archivo .json con todos los datos y adjuntos (PDF, XML, comprobantes); el nombre lleva la fecha y hora">Copia de seguridad</button>
+    <div class="menu">
+      <button class="btn ghost" id="btnMas" aria-label="Más opciones">⋯</button>
+      <div class="menu-list right" id="menuMas" hidden>
+        <label class="as-btn">Restaurar copia de seguridad (.json)
+          <input type="file" id="inpRestaurar" accept=".json,.zip" hidden>
+        </label>
+        <button data-acc="empresas">Empresas compradoras (responsabilidades)…</button>
+        <hr>
+        <button data-acc="borrar" class="danger">Borrar todos los datos…</button>
+      </div>
+    </div>
+  </div>
+</header>
+
+<div id="aviso" class="aviso" hidden></div>
+
+<div id="dropzone" class="dropzone" hidden><div>Suelte aquí los XML y PDF</div></div>
+
+<main>
+  <section class="kpis" id="kpis"></section>
+
+  <nav class="tabs" id="tabs">
+    <button data-tab="pendientes" class="active">Pendientes</button>
+    <button data-tab="historico">Histórico</button>
+    <button data-tab="proveedores">Proveedores</button>
+    <span class="grow"></span>
+    <div class="exportar" title="Exporta lo que se ve en esta pestaña (con los filtros aplicados), separado por empresa facturada">
+      <button class="btn sm" id="btnExpXls" data-no-tab>Excel</button>
+      <button class="btn sm" id="btnExpPdf" data-no-tab>PDF</button>
+    </div>
+  </nav>
+
+  <section class="filtros">
+    <input type="search" id="fTexto" placeholder="Buscar proveedor, número, NIT, CUFE…">
+    <select id="fEmpresa"><option value="">Todas las empresas</option></select>
+    <select id="fCentro" class="no-prov"><option value="">Todos los centros</option></select>
+    <select id="fEstado" class="no-prov">
+      <option value="">Todos los estados</option>
+      <option value="vencida">Vencidas</option>
+      <option value="7">Vencen en 7 días</option>
+      <option value="sinpdf">Sin PDF</option>
+      <option value="sincomp">Pagadas sin comprobante</option>
+    </select>
+    <button type="button" class="btn solo-pend" id="btnAgrupar" aria-pressed="false" title="Muestra los pendientes agrupados por empresa y proveedor, con subtotales y % de participación">Agrupar por proveedor</button>
+    <button class="btn ghost" id="btnLimpiar">Limpiar</button>
+  </section>
+  <section class="filtros rangos no-prov">
+    <fieldset><legend>Fecha de recepción</legend>
+      <input type="date" id="fRecDesde" aria-label="Recepción desde"> a <input type="date" id="fRecHasta" aria-label="Recepción hasta">
+    </fieldset>
+    <fieldset><legend>Fecha de vencimiento</legend>
+      <input type="date" id="fVenDesde" aria-label="Vencimiento desde"> a <input type="date" id="fVenHasta" aria-label="Vencimiento hasta">
+    </fieldset>
+    <fieldset class="solo-hist"><legend>Fecha de pago</legend>
+      <input type="date" id="fDesde" aria-label="Pago desde"> a <input type="date" id="fHasta" aria-label="Pago hasta">
+    </fieldset>
+  </section>
+
+  <section id="barraSel" class="barra-sel" hidden>
+    <span id="selInfo"></span>
+    <button class="btn primary" id="btnPagar">Marcar como pagadas…</button>
+    <button class="btn ghost" id="btnDeselect">Quitar selección</button>
+  </section>
+
+  <section id="vista"></section>
+</main>
+
+<!-- Formulario de factura (nueva, desde XML o edición) -->
+<dialog id="dlgFactura">
+  <form id="frmFactura">
+    <header class="dlg-head">
+      <h2 id="dlgTitulo">Factura</h2>
+      <span id="dlgPaso" class="muted"></span>
+    </header>
+    <div id="dlgAvisos"></div>
+    <div class="grid">
+      <label class="span3 tipo-doc">Tipo de documento
+        <select name="tipoDoc">
+          <option>Factura</option>
+          <option>Nota crédito</option>
+          <option>Nota débito</option>
+          <option>Anticipo</option>
+        </select>
+        <small id="hintTipo" class="muted"></small></label>
+      <label class="span2">Proveedor <input name="proveedor" list="dlProveedores" required></label>
+      <label>NIT proveedor <input name="nit" required inputmode="numeric" placeholder="Sin dígito de verificación">
+        <small id="hintNit" class="muted"></small></label>
+      <label>No factura <input name="numero"></label>
+      <label>Fecha de la factura <input name="fecha" type="date" required></label>
+      <label>Fecha de recepción <input name="fechaRecepcion" type="date" required></label>
+      <label>Fecha de vencimiento <input name="vencimiento" type="date" required>
+        <small id="hintVenc" class="muted"></small></label>
+      <label>Días de crédito <input name="dias" type="number" readonly tabindex="-1"></label>
+      <label>Valor bruto <input name="bruto" type="number" step="0.01" required></label>
+      <label>IVA <input name="iva" type="number" step="0.01"></label>
+      <label>ReteIVA <input name="reteiva" type="number" step="0.01"></label>
+      <label>ReteFuente <input name="retefuente" type="number" step="0.01" readonly tabindex="-1" title="Suma de la lista de retenciones de abajo"></label>
+      <label>Total factura <input name="total" type="number" readonly tabindex="-1">
+        <small id="hintTotal" class="muted"></small></label>
+      <label>Empresa facturada <input name="empresa" list="dlEmpresas" required></label>
+      <label>Centro de costo <input name="centro" list="dlCentros"></label>
+      <label>Fecha pago <input name="fechaPago" type="date"></label>
+      <label>Empresa que pagó <input name="empresaPago" list="dlPagadores"></label>
+      <label title="Si la factura se canceló con un cruce (nota crédito, anticipo…), escriba aquí la referencia; cuenta como pagada.">Cruce / referencia <input name="pagoRef" placeholder="Ej. NCE3327, Anticipo"></label>
+      <label class="span3">Notas <input name="notas"></label>
+    </div>
+    <fieldset class="retenciones" id="secAplicar" hidden>
+      <legend id="aplicarTitulo">Aplicar a facturas</legend>
+      <div id="aplicarCuerpo"></div>
+    </fieldset>
+    <fieldset class="retenciones" id="secRetenciones">
+      <legend>Retención en la fuente (renta) <span id="retVigencia" class="muted"></span></legend>
+      <div id="retFilas"></div>
+      <div class="ret-acciones">
+        <button type="button" class="btn sm" id="btnAddRet">+ Agregar retención</button>
+        <span id="retSugerencia"></span>
+      </div>
+    </fieldset>
+    <details id="detalleXml" class="detalle" open>
+      <summary>Productos y servicios <span id="detalleResumen" class="muted"></span></summary>
+      <div id="detalleCuerpo"></div>
+    </details>
+    <div class="adjuntos">
+      <div id="listaAdjuntos"></div>
+      <label class="btn">Adjuntar PDF / XML
+        <input type="file" id="inpPdf" accept=".pdf,.xml" multiple hidden>
+      </label>
+      <label class="btn">Adjuntar comprobante de pago
+        <input type="file" id="inpComprobante" accept=".pdf,image/*" multiple hidden>
+      </label>
+    </div>
+    <footer class="dlg-foot">
+      <button type="button" class="btn danger ghost" id="btnBorrarFactura" hidden>Eliminar factura</button>
+      <span class="grow"></span>
+      <button type="button" class="btn ghost" id="btnOmitir" hidden>Omitir esta</button>
+      <button type="button" class="btn ghost" id="btnCancelar">Cancelar</button>
+      <button type="submit" class="btn primary" id="btnGuardar">Guardar</button>
+    </footer>
+  </form>
+</dialog>
+
+<!-- Pago en lote -->
+<dialog id="dlgPago">
+  <form id="frmPago">
+    <header class="dlg-head"><h2>Registrar pago</h2></header>
+    <p id="pagoInfo"></p>
+    <div class="grid">
+      <label>Fecha pago <input name="fechaPago" type="date" required></label>
+      <label class="span2">Empresa que pagó <input name="empresaPago" list="dlPagadores"></label>
+      <label class="span3">Comprobante de pago (PDF o imagen, opcional) <input type="file" name="comprobante" accept=".pdf,image/*" multiple>
+        <small class="muted">Se adjunta a cada una de las facturas pagadas.</small></label>
+    </div>
+    <footer class="dlg-foot">
+      <span class="grow"></span>
+      <button type="button" class="btn ghost" id="btnCancelarPago">Cancelar</button>
+      <button type="submit" class="btn primary">Registrar pago</button>
+    </footer>
+  </form>
+</dialog>
+
+<!-- Aviso al recargar con cambios sin copia de seguridad -->
+<dialog id="dlgSalir">
+  <form method="dialog" onsubmit="return false">
+    <header class="dlg-head"><h2>¿Hacer copia de seguridad antes de recargar?</h2></header>
+    <p id="salirInfo"></p>
+    <p class="muted">Los datos se guardan solo en este navegador. Descargue la copia y guárdela en OneDrive o en otra carpeta segura.</p>
+    <footer class="dlg-foot">
+      <button type="button" class="btn ghost" id="salirCancelar">Cancelar</button>
+      <span class="grow"></span>
+      <button type="button" class="btn" id="salirSin">Recargar sin copia</button>
+      <button type="button" class="btn primary" id="salirCopia">Copia de seguridad y recargar</button>
+    </footer>
+  </form>
+</dialog>
+
+<!-- Visor de documentos (PDF e imágenes) sin descargar -->
+<dialog id="dlgVisor">
+  <div class="visor">
+    <header class="visor-head">
+      <div class="visor-tit"><b id="visorNombre"></b> <span id="visorInfo" class="muted"></span></div>
+      <div id="visorLista" class="visor-lista"></div>
+      <div class="visor-acc">
+        <button type="button" class="btn sm" id="visorPestana" title="Abrir en una pestaña del navegador">Abrir en pestaña</button>
+        <button type="button" class="btn sm" id="visorDescargar">Descargar</button>
+        <button type="button" class="btn sm primary" id="visorCerrar">Cerrar</button>
+      </div>
+    </header>
+    <div id="visorCuerpo" class="visor-cuerpo"></div>
+  </div>
+</dialog>
+
+<!-- Ficha del proveedor -->
+<dialog id="dlgFicha">
+  <div class="ficha">
+    <header class="dlg-head">
+      <div><h2 id="fichaNombre"></h2><div id="fichaSub" class="muted"></div></div>
+      <button type="button" class="btn ghost" id="btnCerrarFicha">Cerrar</button>
+    </header>
+    <div id="fichaCuerpo"></div>
+  </div>
+</dialog>
+
+<!-- Responsabilidades tributarias de un proveedor -->
+<dialog id="dlgProveedor">
+  <form id="frmProveedor">
+    <header class="dlg-head"><h2>Responsabilidades del proveedor</h2><span id="provNombre" class="muted"></span></header>
+    <div class="grid">
+      <label>Tipo de persona
+        <select name="persona"><option value="">Sin dato</option><option value="J">Jurídica</option><option value="N">Natural</option></select></label>
+      <label class="span2">Clasificación habitual para retención (se propone en sus ítems)
+        <select name="concepto"></select></label>
+    </div>
+    <fieldset class="resp-lista"><legend>Responsabilidades tributarias (RUT)</legend><div id="provResp"></div></fieldset>
+    <p id="provFuente" class="muted"></p>
+    <footer class="dlg-foot">
+      <span class="grow"></span>
+      <button type="button" class="btn ghost" id="btnCancelarProv">Cancelar</button>
+      <button type="submit" class="btn primary">Guardar</button>
+    </footer>
+  </form>
+</dialog>
+
+<!-- Responsabilidades de las empresas compradoras -->
+<dialog id="dlgEmpresas">
+  <form id="frmEmpresas">
+    <header class="dlg-head"><h2>Empresas compradoras</h2></header>
+    <p class="muted">Indique qué empresas están obligadas a practicar retención en la fuente por renta. Si una empresa no es agente de retención, sus facturas no calculan ReteFuente.</p>
+    <div id="empLista"></div>
+    <footer class="dlg-foot">
+      <span class="grow"></span>
+      <button type="button" class="btn ghost" id="btnCancelarEmp">Cancelar</button>
+      <button type="submit" class="btn primary">Guardar</button>
+    </footer>
+  </form>
+</dialog>
+
+<datalist id="dlProveedores"></datalist>
+<datalist id="dlEmpresas"></datalist>
+<datalist id="dlCentros"></datalist>
+<datalist id="dlPagadores"></datalist>
+
+<div id="toast" class="toast" hidden></div>
+
+<script src="lib/xlsx.full.min.js"></script>
+<script src="lib/jspdf.umd.min.js"></script>
+<script src="lib/jspdf.plugin.autotable.min.js"></script>
+<script src="js/export.js"></script>
+<script src="lib/jszip.min.js"></script>
+<script src="js/parser.js"></script>
+<script src="js/proveedores-semilla.js"></script>
+<script src="js/retenciones.js"></script>
+<script src="js/db.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
