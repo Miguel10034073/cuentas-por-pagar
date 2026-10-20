@@ -1,0 +1,18 @@
+# Copias de seguridad y datos: traen facturas, proveedores y valores. Nunca al repositorio.
+Copias de seguridad/
+Respaldo/
+*.json
+*.zip
+*.xlsx
+*.xlsm
+*.xls
+*.csv
+*.xml
+*.pdf
+
+# Sistema y editor
+.DS_Store
+Thumbs.db
+desktop.ini
+.claude/
+.vscode/
